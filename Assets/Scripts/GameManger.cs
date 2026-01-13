@@ -55,7 +55,7 @@ namespace Pixension
             instance = this;
             DontDestroyOnLoad(gameObject);
 
-            // Generiere zufälligen Seed wenn nicht gesetzt
+            // Generiere zufï¿½lligen Seed wenn nicht gesetzt
             if (seed == 0)
             {
                 seed = Random.Range(int.MinValue, int.MaxValue);
@@ -87,6 +87,9 @@ namespace Pixension
             colliderGO.transform.SetParent(transform);
             colliderManager = colliderGO.AddComponent<Voxels.ChunkColliderManager>();
 
+            // Create UI if it doesn't exist
+            CreateGameUI();
+
             // Lade bestehenden Save oder erstelle neue Welt
             if (loadExistingSave && !string.IsNullOrEmpty(saveToLoad))
             {
@@ -99,6 +102,32 @@ namespace Pixension
 
             isInitialized = true;
             Debug.Log("=== Game Initialization Complete ===");
+        }
+
+        private void CreateGameUI()
+        {
+            // Check if UI already exists
+            UI.GameMenuUIGenerator existingUI = Object.FindFirstObjectByType<UI.GameMenuUIGenerator>();
+            if (existingUI != null)
+            {
+                Debug.Log("GameMenuUI already exists in scene");
+                return;
+            }
+
+            // Create EventSystem if it doesn't exist
+            UnityEngine.EventSystems.EventSystem eventSystem = Object.FindFirstObjectByType<UnityEngine.EventSystems.EventSystem>();
+            if (eventSystem == null)
+            {
+                GameObject eventSystemObj = new GameObject("EventSystem");
+                eventSystemObj.AddComponent<UnityEngine.EventSystems.EventSystem>();
+                eventSystemObj.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
+                Debug.Log("Created EventSystem for UI input");
+            }
+
+            // Create UI Generator
+            GameObject uiGenerator = new GameObject("GameMenuUIGenerator");
+            uiGenerator.AddComponent<UI.GameMenuUIGenerator>();
+            Debug.Log("Created GameMenuUIGenerator");
         }
 
         private void LoadRegistries()
@@ -127,7 +156,7 @@ namespace Pixension
                 Debug.Log($"Loaded MobRegistry: {mobRegistry.GetAllMobs().Count} mobs");
             }
 
-            // Structure Loader (lädt automatisch alle Strukturen)
+            // Structure Loader (lï¿½dt automatisch alle Strukturen)
             Structures.StructureLoader structureLoader = Structures.StructureLoader.Instance;
             Debug.Log($"Loaded Structures: {structureLoader.GetAllStructures().Count}");
 
@@ -146,7 +175,7 @@ namespace Pixension
                 {
                     Debug.Log($"World '{saveToLoad}' loaded successfully");
 
-                    // Seed wird vom Save überschrieben
+                    // Seed wird vom Save ï¿½berschrieben
                     Dimensions.Dimension activeDim = dimensionManager.GetActiveDimension();
                     if (activeDim != null && activeDim.generator != null)
                     {
@@ -251,7 +280,7 @@ namespace Pixension
 
             Debug.Log($"Preloaded {chunksLoaded} chunks around spawn");
 
-            // Rebuild Meshes für alle geladenen Chunks
+            // Rebuild Meshes fï¿½r alle geladenen Chunks
             if (chunkManager != null)
             {
                 Debug.Log("Building meshes for preloaded chunks...");
@@ -269,7 +298,7 @@ namespace Pixension
                 StartCoroutine(ForceRebuildChunks(loadedChunkPositions));
             }
 
-            // Finde höchsten Block an Spawn-Position
+            // Finde hï¿½chsten Block an Spawn-Position
             int spawnY = FindHighestBlockAt(spawnWorldPosition.x, spawnWorldPosition.z);
 
             if (spawnY == -1)
@@ -280,7 +309,7 @@ namespace Pixension
 
             Vector3 playerSpawnPos = new Vector3(
                 spawnWorldPosition.x + 0.5f,
-                spawnY + 1.5f, // +1 für über Block, +0.5 für Player-Center
+                spawnY + 1.5f, // +1 fï¿½r ï¿½ber Block, +0.5 fï¿½r Player-Center
                 spawnWorldPosition.z + 0.5f
             );
 
@@ -382,9 +411,20 @@ namespace Pixension
                 return;
             }
 
+            // Try to load player prefab from Resources if not assigned
+            if (playerPrefab == null)
+            {
+                playerPrefab = Resources.Load<Transform>("Player");
+                if (playerPrefab != null)
+                {
+                    Debug.Log("Loaded player prefab from Resources/Player");
+                }
+            }
+
             if (playerPrefab != null)
             {
                 playerInstance = Instantiate(playerPrefab, position, Quaternion.identity);
+                playerInstance.name = "Player"; // Remove (Clone) suffix
                 Debug.Log($"Player spawned at {position}");
 
                 // Setze Player Reference im ChunkManager
@@ -408,7 +448,7 @@ namespace Pixension
             }
             else
             {
-                Debug.LogWarning("No player prefab assigned, searching for existing player...");
+                Debug.LogWarning("No player prefab found in Resources/Player, searching for existing player...");
 
                 // Suche nach bestehendem Player
                 Player.PlayerController player = Object.FindFirstObjectByType<Player.PlayerController>();
@@ -436,7 +476,7 @@ namespace Pixension
                 }
                 else
                 {
-                    Debug.LogError("No player found in scene and no prefab assigned!");
+                    Debug.LogError("No player found in scene and no prefab in Resources/Player!");
                 }
             }
         }
@@ -543,7 +583,7 @@ namespace Pixension
         {
             Debug.Log("Respawning player at spawn position...");
 
-            // Finde höchsten Block an Spawn
+            // Finde hï¿½chsten Block an Spawn
             int spawnY = FindHighestBlockAt(spawnWorldPosition.x, spawnWorldPosition.z);
 
             if (spawnY == -1)

@@ -63,6 +63,13 @@ namespace Pixension.Voxels
                 chunk.meshRenderer.material = VoxelMaterialManager.Instance.GetMaterial();
             }
 
+            // Update MeshCollider with the new mesh
+            if (chunk.meshCollider != null && mesh != null)
+            {
+                chunk.meshCollider.sharedMesh = null; // Clear old mesh first
+                chunk.meshCollider.sharedMesh = mesh; // Assign new mesh
+            }
+
             return mesh;
         }
 
