@@ -147,6 +147,15 @@ namespace Pixension.Voxels
             if (chunk == null || chunk.meshFilter == null)
                 return;
 
+            // Check if chunk became dirty during mesh generation (e.g., neighbor chunk was created)
+            // If so, the generated mesh has stale neighbor data for face culling
+            // Skip applying this mesh and queue for regeneration with correct neighbor data
+            if (chunk.isDirty)
+            {
+                chunkManager.MarkChunkDirty(chunk.chunkPosition);
+                return;
+            }
+
             // Get mesh from pool
             Mesh mesh = Utilities.MeshPool.Instance.GetMesh();
             mesh.subMeshCount = 2;
