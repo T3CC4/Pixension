@@ -224,13 +224,13 @@ namespace Pixension.Player
 
             // Get mesh pool stats
             var meshPool = Utilities.MeshPool.Instance;
-            var poolStats = meshPool != null ? meshPool.GetStats() : (0, 0, 0);
+            var (available, active, total) = meshPool != null ? meshPool.GetStats() : (0, 0, 0);
 
             // Build stats text
             float fps = 1000f / frameTime;
             string statsText = $"FPS: {fps:F0} ({frameTime:F1}ms)\n" +
                              $"Chunks: {loadedChunks}\n" +
-                             $"Mesh Pool: {poolStats.active}/{poolStats.total} (Free: {poolStats.available})";
+                             $"Mesh Pool: {active}/{total} (Free: {available})";
 
             // Shadow
             Draw.Color = infoTextShadowColor;

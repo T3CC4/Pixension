@@ -43,8 +43,10 @@ namespace Pixension.Dimensions
 
             RegisterGenerator("grassland", typeof(WorldGen.GrasslandGenerator));
             RegisterGenerator("desert", typeof(WorldGen.DesertGenerator));
+            RegisterGenerator("biome_world", typeof(WorldGen.BiomeWorldGenerator));
 
-            CreateDimension("overworld", "grassland");
+            // Use biome_world for the overworld to get full biome diversity
+            CreateDimension("overworld", "biome_world");
 
             SwitchDimension("overworld");
         }
