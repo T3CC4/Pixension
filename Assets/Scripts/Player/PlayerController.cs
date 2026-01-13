@@ -10,25 +10,31 @@ namespace Pixension.Player
         private Camera playerCamera;
         private Voxels.VoxelModifier voxelModifier;
 
+        [Header("Movement")]
         public float moveSpeed = 5f;
-        public float jumpForce = 5f;
-        public float gravity = -9.81f;
+        public float jumpHeight = 1.6f;
+        public float gravity = -25f;
+
+        [Header("Mouse")]
         public float mouseSensitivity = 2f;
         public float maxReachDistance = 5f;
 
         private Vector3 velocity;
-        private float verticalRotation = 0f;
+        private float verticalRotation;
         private bool cursorLocked = true;
+        private bool isGrounded;
 
-        private Voxels.VoxelData selectedVoxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, Color.red);
+        private Voxels.VoxelData selectedVoxel =
+            new Voxels.VoxelData(Voxels.VoxelType.Solid, Color.red);
+
         private string selectedEntityID = "";
         private bool isBlockMode = true;
 
         private Vector3Int currentHitPos;
         private Vector3Int currentHitNormal;
-        private bool hasTarget = false;
+        private bool hasTarget;
 
-        private Color[] quickColors = new Color[]
+        private readonly Color[] quickColors =
         {
             Color.red,
             Color.green,
@@ -44,18 +50,12 @@ namespace Pixension.Player
         private void Start()
         {
             controller = GetComponent<CharacterController>();
-            playerCamera = GetComponentInChildren<Camera>();
-
-            if (playerCamera == null)
-            {
-                playerCamera = Camera.main;
-            }
+            playerCamera = GetComponentInChildren<Camera>() ?? Camera.main;
 
             voxelModifier = Voxels.ChunkManager.Instance.GetVoxelModifier();
+            Voxels.ChunkManager.Instance.player = transform;
 
             LockCursor();
-
-            Voxels.ChunkManager.Instance.player = transform;
         }
 
         private void Update()
@@ -73,32 +73,31 @@ namespace Pixension.Player
             var keyboard = Keyboard.current;
             if (keyboard == null) return;
 
-            float horizontal = 0f;
-            float vertical = 0f;
+            isGrounded = controller.isGrounded;
 
-            if (keyboard.aKey.isPressed) horizontal -= 1f;
-            if (keyboard.dKey.isPressed) horizontal += 1f;
-            if (keyboard.wKey.isPressed) vertical += 1f;
-            if (keyboard.sKey.isPressed) vertical -= 1f;
+            if (isGrounded && velocity.y < 0f)
+                velocity.y = -2f;
 
-            Vector3 move = transform.right * horizontal + transform.forward * vertical;
+            float x = 0f;
+            float z = 0f;
+
+            if (keyboard.aKey.isPressed) x -= 1f;
+            if (keyboard.dKey.isPressed) x += 1f;
+            if (keyboard.wKey.isPressed) z += 1f;
+            if (keyboard.sKey.isPressed) z -= 1f;
+
+            Vector3 move =
+                (transform.right * x + transform.forward * z).normalized;
+
             controller.Move(move * moveSpeed * Time.deltaTime);
 
-            if (controller.isGrounded)
+            if (keyboard.spaceKey.wasPressedThisFrame && isGrounded)
             {
-                if (velocity.y < 0)
-                {
-                    velocity.y = -2f;
-                }
-
-                if (keyboard.spaceKey.wasPressedThisFrame)
-                {
-                    velocity.y = jumpForce;
-                }
+                velocity.y = Mathf.Sqrt(jumpHeight * -2f * gravity);
             }
 
             velocity.y += gravity * Time.deltaTime;
-            controller.Move(velocity * Time.deltaTime);
+            controller.Move(Vector3.up * velocity.y * Time.deltaTime);
         }
 
         private void HandleMouseLook()
@@ -108,60 +107,120 @@ namespace Pixension.Player
             var mouse = Mouse.current;
             if (mouse == null) return;
 
-            Vector2 mouseDelta = mouse.delta.ReadValue();
-            float mouseX = mouseDelta.x * mouseSensitivity * 0.1f;
-            float mouseY = mouseDelta.y * mouseSensitivity * 0.1f;
+            Vector2 delta = mouse.delta.ReadValue() * mouseSensitivity * 0.1f;
 
-            transform.Rotate(Vector3.up * mouseX);
+            transform.Rotate(Vector3.up * delta.x);
 
-            verticalRotation -= mouseY;
+            verticalRotation -= delta.y;
             verticalRotation = Mathf.Clamp(verticalRotation, -90f, 90f);
-            playerCamera.transform.localRotation = Quaternion.Euler(verticalRotation, 0f, 0f);
+            playerCamera.transform.localRotation =
+                Quaternion.Euler(verticalRotation, 0f, 0f);
         }
 
         private void HandleVoxelInteraction()
         {
-            Ray ray = playerCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
-            hasTarget = voxelModifier.RaycastVoxel(ray, maxReachDistance, out currentHitPos, out currentHitNormal);
+            Ray ray = playerCamera.ViewportPointToRay(
+                new Vector3(0.5f, 0.5f));
+
+            hasTarget = voxelModifier.RaycastVoxel(
+                ray,
+                maxReachDistance,
+                out currentHitPos,
+                out currentHitNormal
+            );
 
             var mouse = Mouse.current;
             var keyboard = Keyboard.current;
             if (mouse == null || keyboard == null) return;
 
-            if (hasTarget)
-            {
-                if (mouse.leftButton.wasPressedThisFrame)
-                {
-                    RemoveVoxel();
-                }
+            if (!hasTarget) return;
 
-                if (mouse.rightButton.wasPressedThisFrame)
-                {
-                    PlaceVoxel();
-                }
+            if (mouse.leftButton.wasPressedThisFrame)
+                RemoveVoxel();
 
-                if (keyboard.eKey.wasPressedThisFrame)
-                {
-                    InteractWithEntity();
-                }
-            }
+            if (mouse.rightButton.wasPressedThisFrame)
+                PlaceVoxel();
+
+            if (keyboard.eKey.wasPressedThisFrame)
+                InteractWithEntity();
+        }
+
+        private void RemoveVoxel()
+        {
+            if (isBlockMode)
+                voxelModifier.RemoveBlock(currentHitPos);
+            else
+                voxelModifier.RemoveBlockEntity(currentHitPos);
+        }
+
+        private void PlaceVoxel()
+        {
+            Vector3Int pos = currentHitPos + currentHitNormal;
+
+            if (isBlockMode)
+                voxelModifier.PlaceBlock(pos, selectedVoxel);
+            else if (!string.IsNullOrEmpty(selectedEntityID))
+                voxelModifier.PlaceBlockEntity(
+                    selectedEntityID,
+                    pos,
+                    Utilities.Direction.North
+                );
+        }
+
+        private void InteractWithEntity()
+        {
+            var entity =
+                Entities.BlockEntityManager.Instance
+                    .GetEntityAtPosition(currentHitPos);
+
+            if (entity is Entities.IInteractable interactable)
+                interactable.OnInteract(gameObject);
+        }
+
+        private void HandleColorSelection()
+        {
+            var k = Keyboard.current;
+            if (k == null) return;
+
+            if (k.digit1Key.wasPressedThisFrame) SelectColor(0);
+            if (k.digit2Key.wasPressedThisFrame) SelectColor(1);
+            if (k.digit3Key.wasPressedThisFrame) SelectColor(2);
+            if (k.digit4Key.wasPressedThisFrame) SelectColor(3);
+            if (k.digit5Key.wasPressedThisFrame) SelectColor(4);
+            if (k.digit6Key.wasPressedThisFrame) SelectColor(5);
+            if (k.digit7Key.wasPressedThisFrame) SelectColor(6);
+            if (k.digit8Key.wasPressedThisFrame) SelectColor(7);
+            if (k.digit9Key.wasPressedThisFrame) SelectColor(8);
+        }
+
+        private void SelectColor(int index)
+        {
+            selectedVoxel =
+                new Voxels.VoxelData(
+                    Voxels.VoxelType.Solid,
+                    quickColors[index]
+                );
+        }
+
+        private void HandleModeSwitch()
+        {
+            var k = Keyboard.current;
+            if (k == null) return;
+
+            if (k.tabKey.wasPressedThisFrame)
+                isBlockMode = !isBlockMode;
         }
 
         private void HandleCursorToggle()
         {
-            var keyboard = Keyboard.current;
-            if (keyboard == null) return;
+            var k = Keyboard.current;
+            var m = Mouse.current;
 
-            if (keyboard.escapeKey.wasPressedThisFrame)
-            {
+            if (k != null && k.escapeKey.wasPressedThisFrame)
                 UnlockCursor();
-            }
 
-            var mouse = Mouse.current;
-            if (mouse != null && mouse.leftButton.wasPressedThisFrame && !cursorLocked)
-            {
+            if (m != null && m.leftButton.wasPressedThisFrame && !cursorLocked)
                 LockCursor();
-            }
         }
 
         private void LockCursor()
@@ -178,92 +237,11 @@ namespace Pixension.Player
             cursorLocked = false;
         }
 
-        private void RemoveVoxel()
-        {
-            if (isBlockMode)
-            {
-                voxelModifier.RemoveBlock(currentHitPos);
-            }
-            else
-            {
-                voxelModifier.RemoveBlockEntity(currentHitPos);
-            }
-        }
-
-        private void PlaceVoxel()
-        {
-            Vector3Int placePos = currentHitPos + currentHitNormal;
-
-            if (isBlockMode)
-            {
-                voxelModifier.PlaceBlock(placePos, selectedVoxel);
-            }
-            else
-            {
-                if (!string.IsNullOrEmpty(selectedEntityID))
-                {
-                    voxelModifier.PlaceBlockEntity(selectedEntityID, placePos, Utilities.Direction.North);
-                }
-            }
-        }
-
-        private void InteractWithEntity()
-        {
-            Entities.BlockEntity entity = Entities.BlockEntityManager.Instance.GetEntityAtPosition(currentHitPos);
-
-            if (entity != null && entity is Entities.IInteractable interactable)
-            {
-                interactable.OnInteract(gameObject);
-            }
-        }
-
-        private void HandleColorSelection()
-        {
-            var keyboard = Keyboard.current;
-            if (keyboard == null) return;
-
-            if (keyboard.digit1Key.wasPressedThisFrame) SelectColor(0);
-            if (keyboard.digit2Key.wasPressedThisFrame) SelectColor(1);
-            if (keyboard.digit3Key.wasPressedThisFrame) SelectColor(2);
-            if (keyboard.digit4Key.wasPressedThisFrame) SelectColor(3);
-            if (keyboard.digit5Key.wasPressedThisFrame) SelectColor(4);
-            if (keyboard.digit6Key.wasPressedThisFrame) SelectColor(5);
-            if (keyboard.digit7Key.wasPressedThisFrame) SelectColor(6);
-            if (keyboard.digit8Key.wasPressedThisFrame) SelectColor(7);
-            if (keyboard.digit9Key.wasPressedThisFrame) SelectColor(8);
-        }
-
-        private void SelectColor(int index)
-        {
-            selectedVoxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, quickColors[index]);
-            Debug.Log($"Selected color: {quickColors[index]}");
-        }
-
-        private void HandleModeSwitch()
-        {
-            var keyboard = Keyboard.current;
-            if (keyboard == null) return;
-
-            if (keyboard.tabKey.wasPressedThisFrame)
-            {
-                isBlockMode = !isBlockMode;
-                Debug.Log($"Mode: {(isBlockMode ? "Block" : "Entity")}");
-            }
-        }
-
-        public void SetSelectedEntityID(string entityID)
-        {
-            selectedEntityID = entityID;
-            isBlockMode = false;
-        }
-
         public string GetInfoText()
         {
-            string modeText = isBlockMode ? "Block Mode" : "Entity Mode";
-            string targetText = hasTarget ? $"Target: {currentHitPos}" : "No Target";
-            string colorText = isBlockMode ? $"Color: {selectedVoxel.color}" : $"Entity: {selectedEntityID}";
-
-            return $"{modeText}\n{targetText}\n{colorText}";
+            return
+                $"{(isBlockMode ? "Block" : "Entity")} Mode\n" +
+                $"{(hasTarget ? currentHitPos.ToString() : "No Target")}";
         }
 
         public bool HasTarget()

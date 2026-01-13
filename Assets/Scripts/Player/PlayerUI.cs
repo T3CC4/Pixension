@@ -1,5 +1,6 @@
+﻿using Shapes;
 using UnityEngine;
-using Shapes;
+using UnityEngine.Rendering;
 
 namespace Pixension.Player
 {
@@ -27,14 +28,10 @@ namespace Pixension.Player
         public float hotbarSlotSize = 50f;
         public float hotbarSlotSpacing = 5f;
 
-        [Header("Target Indicator")]
-        public bool showTargetIndicator = true;
-        public Color targetIndicatorColor = new Color(1f, 1f, 1f, 0.3f);
-        public float targetIndicatorSize = 1.05f;
-
         private void Start()
         {
-            playerController = Object.FindFirstObjectByType<PlayerController>();
+            if (Application.isPlaying)
+                playerController = Object.FindFirstObjectByType<PlayerController>();
         }
 
         public override void DrawShapes(Camera cam)
@@ -42,9 +39,15 @@ namespace Pixension.Player
             if (!Application.isPlaying)
                 return;
 
+            if (cam != Camera.main)
+                return;
+
             using (Draw.Command(cam))
             {
-                Draw.Matrix = Matrix4x4.identity;
+                //Draw.PushMatrix(); 
+
+                //Draw.Matrix = Camera.main.worldToCameraMatrix;
+                Draw.ZTest = CompareFunction.Always;
                 Draw.BlendMode = ShapesBlendMode.Transparent;
 
                 DrawCrosshair();
@@ -52,6 +55,8 @@ namespace Pixension.Player
 
                 if (showHotbar)
                     DrawHotbar();
+
+                Draw.PopMatrix();
             }
         }
 
@@ -60,34 +65,18 @@ namespace Pixension.Player
             Vector2 center = new Vector2(Screen.width * 0.5f, Screen.height * 0.5f);
 
             bool hasTarget = playerController != null && playerController.HasTarget();
-            Color color = hasTarget ? crosshairTargetColor : crosshairColor;
+            Draw.Color = hasTarget ? crosshairTargetColor : crosshairColor;
 
             Draw.LineGeometry = LineGeometry.Flat2D;
             Draw.Thickness = crosshairThickness;
-            Draw.Color = color;
 
             float offset = crosshairGap;
-            float lineLength = crosshairSize;
+            float length = crosshairSize;
 
-            Draw.Line(
-                new Vector2(center.x + offset, center.y),
-                new Vector2(center.x + offset + lineLength, center.y)
-            );
-
-            Draw.Line(
-                new Vector2(center.x - offset, center.y),
-                new Vector2(center.x - offset - lineLength, center.y)
-            );
-
-            Draw.Line(
-                new Vector2(center.x, center.y + offset),
-                new Vector2(center.x, center.y + offset + lineLength)
-            );
-
-            Draw.Line(
-                new Vector2(center.x, center.y - offset),
-                new Vector2(center.x, center.y - offset - lineLength)
-            );
+            Draw.Line(center + Vector2.right * offset, center + Vector2.right * (offset + length));
+            Draw.Line(center + Vector2.left * offset, center + Vector2.left * (offset + length));
+            Draw.Line(center + Vector2.up * offset, center + Vector2.up * (offset + length));
+            Draw.Line(center + Vector2.down * offset, center + Vector2.down * (offset + length));
         }
 
         private void DrawInfoText()
@@ -95,41 +84,44 @@ namespace Pixension.Player
             if (playerController == null)
                 return;
 
-            string infoText = playerController.GetInfoText();
-            Vector2 position = new Vector2(20f, Screen.height - 20f);
+            string text = playerController.GetInfoText();
+            Vector2 pos = new Vector2(20f, Screen.height - 20f);
 
             Draw.FontSize = infoTextSize;
             Draw.TextAlign = TextAlign.TopLeft;
 
             Draw.Color = infoTextShadowColor;
-            Draw.Text(position + new Vector2(2f, -2f), infoText);
+            Draw.Text(pos + new Vector2(2f, -2f), text);
 
             Draw.Color = infoTextColor;
-            Draw.Text(position, infoText);
+            Draw.Text(pos, text);
         }
 
         private void DrawHotbar()
         {
-            int slotCount = 9;
-            float totalWidth = slotCount * hotbarSlotSize + (slotCount - 1) * hotbarSlotSpacing;
-            float startX = (Screen.width - totalWidth) * 0.5f;
-            float bottomY = 40f;
+            int slots = 9;
+            float width = slots * hotbarSlotSize + (slots - 1) * hotbarSlotSpacing;
+            float startX = (Screen.width - width) * 0.5f;
+            float y = 40f;
 
-            for (int i = 0; i < slotCount; i++)
+            for (int i = 0; i < slots; i++)
             {
                 float x = startX + i * (hotbarSlotSize + hotbarSlotSpacing);
-                Vector2 slotPosition = new Vector2(x + hotbarSlotSize * 0.5f, bottomY + hotbarSlotSize * 0.5f);
+                Vector2 center = new Vector2(
+                    x + hotbarSlotSize * 0.5f,
+                    y + hotbarSlotSize * 0.5f
+                );
 
                 Draw.Color = hotbarBgColor;
-                Draw.Rectangle(slotPosition, new Vector2(hotbarSlotSize, hotbarSlotSize));
+                Draw.Rectangle(center, new Vector2(hotbarSlotSize, hotbarSlotSize));
 
                 Draw.Color = hotbarSelectedColor;
-                Draw.RectangleBorder(slotPosition, new Vector2(hotbarSlotSize, hotbarSlotSize), 2f);
+                Draw.RectangleBorder(center, new Vector2(hotbarSlotSize, hotbarSlotSize), 2f);
 
                 Draw.FontSize = 12;
                 Draw.TextAlign = TextAlign.Center;
                 Draw.Color = Color.white;
-                Draw.Text(new Vector2(slotPosition.x, slotPosition.y - hotbarSlotSize * 0.3f), (i + 1).ToString());
+                Draw.Text(center + Vector2.down * hotbarSlotSize * 0.3f, (i + 1).ToString());
             }
         }
     }
