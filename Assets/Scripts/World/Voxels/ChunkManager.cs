@@ -22,11 +22,13 @@ namespace Pixension.Voxels
 
         private Queue<Vector3Int> rebuildQueue = new Queue<Vector3Int>();
         private ChunkMeshGenerator meshGenerator;
+        private AsyncChunkMeshGenerator asyncMeshGenerator;
         private VoxelModifier voxelModifier;
 
         public int renderDistance = 4;
         public Transform player;
-        public int maxRebuildsPerFrame = 4; // Increased from 1 to 4 for better performance
+        public int maxRebuildsPerFrame = 4;
+        public bool useAsyncGeneration = true; // Toggle for async mesh generation
 
         private void Awake()
         {
@@ -38,6 +40,7 @@ namespace Pixension.Voxels
             instance = this;
             DontDestroyOnLoad(gameObject);
             meshGenerator = new ChunkMeshGenerator(this);
+            asyncMeshGenerator = new AsyncChunkMeshGenerator(this);
         }
 
         private void Update()
@@ -46,6 +49,12 @@ namespace Pixension.Voxels
             {
                 UpdateChunksAroundPlayer();
             }
+
+            if (useAsyncGeneration)
+            {
+                asyncMeshGenerator.Update();
+            }
+
             RebuildDirtyChunks();
         }
 
@@ -228,7 +237,22 @@ namespace Pixension.Voxels
 
         private void RebuildChunkMesh(Chunk chunk)
         {
-            meshGenerator.GenerateMesh(chunk);
+            if (useAsyncGeneration)
+            {
+                asyncMeshGenerator.GenerateMeshAsync(chunk);
+            }
+            else
+            {
+                meshGenerator.GenerateMesh(chunk);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (asyncMeshGenerator != null)
+            {
+                asyncMeshGenerator.CancelAllJobs();
+            }
         }
 
         public Vector3Int WorldToChunkPosition(Vector3 worldPos)
