@@ -21,6 +21,7 @@ namespace Pixension.Voxels
         }
 
         private Material voxelMaterial;
+        private Material transparentMaterial;
 
         private void Awake()
         {
@@ -48,6 +49,28 @@ namespace Pixension.Voxels
                 voxelMaterial = new Material(shader);
                 voxelMaterial.name = "VoxelMaterial";
             }
+
+            if (transparentMaterial == null)
+            {
+                Shader shader = Shader.Find("Voxel/VertexColor");
+                if (shader == null)
+                {
+                    Debug.LogError("Shader 'Voxel/VertexColor' not found. Please ensure the shader is in the project.");
+                    return;
+                }
+
+                transparentMaterial = new Material(shader);
+                transparentMaterial.name = "VoxelMaterialTransparent";
+
+                // Set transparent rendering mode
+                transparentMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                transparentMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                transparentMaterial.SetInt("_ZWrite", 0);
+                transparentMaterial.DisableKeyword("_ALPHATEST_ON");
+                transparentMaterial.EnableKeyword("_ALPHABLEND_ON");
+                transparentMaterial.DisableKeyword("_ALPHAPREMULTIPLY_ON");
+                transparentMaterial.renderQueue = 3000;
+            }
         }
 
         public Material GetMaterial()
@@ -57,6 +80,15 @@ namespace Pixension.Voxels
                 Initialize();
             }
             return voxelMaterial;
+        }
+
+        public Material GetTransparentMaterial()
+        {
+            if (transparentMaterial == null)
+            {
+                Initialize();
+            }
+            return transparentMaterial;
         }
     }
 }
