@@ -208,11 +208,93 @@ namespace Pixension.Voxels
             job.trianglesTransparent.Dispose();
         }
 
+        /// <summary>
+        /// Gets neighbor voxel data for proper face culling at chunk boundaries
+        /// </summary>
         private NativeArray<VoxelDataStruct> GetNeighborData(Chunk chunk)
         {
-            // For now, return empty array - implement neighbor checking if needed
-            // This would require checking adjacent chunks for proper face culling
-            return new NativeArray<VoxelDataStruct>(0, Allocator.TempJob);
+            // We need to check 6 neighboring chunks (one per face direction)
+            // For each chunk boundary face, we need a 16x16 slice of data from the neighbor
+            // Format: [face_index][y * 16 + z] for X-facing, [face_index][x * 16 + z] for Y-facing, etc.
+
+            int chunkSize = Chunk.CHUNK_SIZE;
+            // 6 faces * 16x16 = 1536 voxels
+            NativeArray<VoxelDataStruct> neighborData = new NativeArray<VoxelDataStruct>(6 * chunkSize * chunkSize, Allocator.TempJob);
+
+            // Initialize all to air
+            for (int i = 0; i < neighborData.Length; i++)
+            {
+                neighborData[i] = new VoxelDataStruct { type = 0, r = 0, g = 0, b = 0, a = 0 };
+            }
+
+            // Check each of 6 neighbor chunks
+            Vector3Int[] neighborOffsets = new Vector3Int[]
+            {
+                new Vector3Int(1, 0, 0),   // Right (+X)
+                new Vector3Int(-1, 0, 0),  // Left (-X)
+                new Vector3Int(0, 1, 0),   // Top (+Y)
+                new Vector3Int(0, -1, 0),  // Bottom (-Y)
+                new Vector3Int(0, 0, 1),   // Front (+Z)
+                new Vector3Int(0, 0, -1)   // Back (-Z)
+            };
+
+            for (int faceIndex = 0; faceIndex < 6; faceIndex++)
+            {
+                Vector3Int neighborChunkPos = chunk.chunkPosition + neighborOffsets[faceIndex];
+                Chunk neighborChunk = chunkManager.GetChunk(neighborChunkPos);
+
+                if (neighborChunk == null)
+                    continue;
+
+                int baseIndex = faceIndex * chunkSize * chunkSize;
+
+                // Extract the boundary slice from neighbor chunk
+                for (int i = 0; i < chunkSize; i++)
+                {
+                    for (int j = 0; j < chunkSize; j++)
+                    {
+                        int x, y, z;
+
+                        // Determine which slice to extract based on face direction
+                        switch (faceIndex)
+                        {
+                            case 0: // Right (+X) - get left slice (x=0) of right neighbor
+                                x = 0; y = i; z = j;
+                                break;
+                            case 1: // Left (-X) - get right slice (x=15) of left neighbor
+                                x = chunkSize - 1; y = i; z = j;
+                                break;
+                            case 2: // Top (+Y) - get bottom slice (y=0) of top neighbor
+                                x = i; y = 0; z = j;
+                                break;
+                            case 3: // Bottom (-Y) - get top slice (y=15) of bottom neighbor
+                                x = i; y = chunkSize - 1; z = j;
+                                break;
+                            case 4: // Front (+Z) - get back slice (z=0) of front neighbor
+                                x = i; y = j; z = 0;
+                                break;
+                            case 5: // Back (-Z) - get front slice (z=15) of back neighbor
+                                x = i; y = j; z = chunkSize - 1;
+                                break;
+                            default:
+                                x = y = z = 0;
+                                break;
+                        }
+
+                        VoxelData voxel = neighborChunk.GetVoxel(x, y, z);
+                        neighborData[baseIndex + i * chunkSize + j] = new VoxelDataStruct
+                        {
+                            type = (int)voxel.type,
+                            r = voxel.color.r,
+                            g = voxel.color.g,
+                            b = voxel.color.b,
+                            a = voxel.color.a
+                        };
+                    }
+                }
+            }
+
+            return neighborData;
         }
 
         public int GetActiveJobCount()
@@ -301,17 +383,22 @@ namespace Pixension.Voxels
             int ny = y + dy;
             int nz = z + dz;
 
-            // Check bounds
+            VoxelDataStruct neighbor;
+
+            // Check if neighbor is outside chunk bounds
             if (nx < 0 || nx >= chunkSize || ny < 0 || ny >= chunkSize || nz < 0 || nz >= chunkSize)
             {
-                AddFace(x, y, z, voxel, dx, dy, dz);
-                return;
+                // Get neighbor from neighboring chunk data
+                neighbor = GetNeighborVoxel(x, y, z, dx, dy, dz);
+            }
+            else
+            {
+                // Get neighbor from within this chunk
+                int neighborIndex = nx + ny * chunkSize + nz * chunkSize * chunkSize;
+                neighbor = voxelData[neighborIndex];
             }
 
-            // Check neighbor
-            int neighborIndex = nx + ny * chunkSize + nz * chunkSize * chunkSize;
-            VoxelDataStruct neighbor = voxelData[neighborIndex];
-
+            // Determine if we need to render a face
             bool needsFace = false;
             if (voxel.IsSolid)
             {
@@ -326,6 +413,72 @@ namespace Pixension.Voxels
             {
                 AddFace(x, y, z, voxel, dx, dy, dz);
             }
+        }
+
+        private VoxelDataStruct GetNeighborVoxel(int x, int y, int z, int dx, int dy, int dz)
+        {
+            // Determine which face we're checking
+            int faceIndex = -1;
+            int i, j; // Coordinates within the neighbor face slice
+
+            if (dx > 0) // Right face (+X)
+            {
+                faceIndex = 0;
+                i = y;
+                j = z;
+            }
+            else if (dx < 0) // Left face (-X)
+            {
+                faceIndex = 1;
+                i = y;
+                j = z;
+            }
+            else if (dy > 0) // Top face (+Y)
+            {
+                faceIndex = 2;
+                i = x;
+                j = z;
+            }
+            else if (dy < 0) // Bottom face (-Y)
+            {
+                faceIndex = 3;
+                i = x;
+                j = z;
+            }
+            else if (dz > 0) // Front face (+Z)
+            {
+                faceIndex = 4;
+                i = x;
+                j = y;
+            }
+            else if (dz < 0) // Back face (-Z)
+            {
+                faceIndex = 5;
+                i = x;
+                j = y;
+            }
+            else
+            {
+                // Invalid direction, return air
+                return new VoxelDataStruct { type = 0, r = 0, g = 0, b = 0, a = 0 };
+            }
+
+            // Check if we have neighbor data
+            if (neighborData.Length == 0)
+            {
+                // No neighbor data available, assume air (show face)
+                return new VoxelDataStruct { type = 0, r = 0, g = 0, b = 0, a = 0 };
+            }
+
+            // Get voxel from neighbor data
+            int neighborIndex = faceIndex * chunkSize * chunkSize + i * chunkSize + j;
+            if (neighborIndex >= 0 && neighborIndex < neighborData.Length)
+            {
+                return neighborData[neighborIndex];
+            }
+
+            // Fallback to air
+            return new VoxelDataStruct { type = 0, r = 0, g = 0, b = 0, a = 0 };
         }
 
         private void AddFace(int x, int y, int z, VoxelDataStruct voxel, int dx, int dy, int dz)
