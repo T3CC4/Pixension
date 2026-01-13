@@ -26,7 +26,7 @@ namespace Pixension.Voxels
 
         public int renderDistance = 4;
         public Transform player;
-        public int maxRebuildsPerFrame = 1;
+        public int maxRebuildsPerFrame = 4; // Increased from 1 to 4 for better performance
 
         private void Awake()
         {
@@ -131,7 +131,7 @@ namespace Pixension.Voxels
                 }
                 rebuildQueue = tempQueue;
 
-                // Zerstöre GameObject
+                // Zerstï¿½re GameObject
                 if (chunk.gameObject != null)
                 {
                     Destroy(chunk.gameObject);

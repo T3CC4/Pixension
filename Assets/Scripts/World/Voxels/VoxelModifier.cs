@@ -32,11 +32,35 @@ namespace Pixension.Voxels
             }
 
             Vector3Int localPos = chunk.WorldToLocal(blockPos);
+            VoxelData oldVoxel = chunk.GetVoxel(localPos.x, localPos.y, localPos.z);
+
             chunk.SetVoxel(localPos.x, localPos.y, localPos.z, voxelData);
             chunk.SetDirty();
             chunkManager.MarkChunkDirty(chunkPos);
 
             MarkNeighborChunksIfOnBoundary(chunk, localPos);
+
+            // Notify water simulation if water was placed or removed
+            if (voxelData.IsLiquid || oldVoxel.IsLiquid)
+            {
+                if (Systems.WaterSimulation.Instance != null)
+                {
+                    Systems.WaterSimulation.Instance.QueueWaterUpdate(blockPos);
+
+                    // Also queue neighbors
+                    Vector3Int[] dirs = new Vector3Int[]
+                    {
+                        Vector3Int.up, Vector3Int.down,
+                        Vector3Int.left, Vector3Int.right,
+                        Vector3Int.forward, Vector3Int.back
+                    };
+
+                    foreach (Vector3Int dir in dirs)
+                    {
+                        Systems.WaterSimulation.Instance.QueueWaterUpdate(blockPos + dir);
+                    }
+                }
+            }
 
             return true;
         }
