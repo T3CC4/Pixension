@@ -115,9 +115,24 @@ namespace Pixension.WorldGen
                             continue;
                         }
 
+                        // Check for cave generation
+                        bool isCave = GenerateCave(worldX, worldY, worldZ, height);
+
                         Voxels.VoxelData voxel;
 
-                        if (worldY == MIN_WORLD_HEIGHT)
+                        if (isCave && worldY < height && worldY > MIN_WORLD_HEIGHT + 1)
+                        {
+                            // Cave - hollow out unless underwater
+                            if (worldY <= WATER_LEVEL && worldY > height - 10)
+                            {
+                                voxel = blockRegistry.GetBlock("water");
+                            }
+                            else
+                            {
+                                voxel = Voxels.VoxelData.Air;
+                            }
+                        }
+                        else if (worldY == MIN_WORLD_HEIGHT)
                         {
                             // Bedrock layer at absolute bottom
                             voxel = blockRegistry.GetBlock("bedrock");
@@ -274,6 +289,47 @@ namespace Pixension.WorldGen
         public static int GetBaseHeight()
         {
             return BASE_HEIGHT;
+        }
+
+        /// <summary>
+        /// Generates caves using 3D noise
+        /// Returns true if the position should be carved out as a cave
+        /// </summary>
+        private bool GenerateCave(int worldX, int worldY, int worldZ, int surfaceHeight)
+        {
+            // Don't generate caves too close to surface or bedrock
+            if (worldY > surfaceHeight - 5 || worldY < MIN_WORLD_HEIGHT + 3)
+            {
+                return false;
+            }
+
+            // Use 3D noise for cave generation
+            // Layer 1: Large cave systems
+            float caveNoise1 = noise.Get3DNoise(worldX, worldY, worldZ, 80f, NoiseType.Simplex);
+
+            // Layer 2: Smaller tunnels
+            float caveNoise2 = noise.Get3DNoise(worldX + 1000, worldY + 1000, worldZ + 1000, 40f, NoiseType.Simplex);
+
+            // Layer 3: Vertical variation
+            float caveNoise3 = noise.Get3DNoise(worldX - 1000, worldY - 1000, worldZ - 1000, 60f, NoiseType.Ridged);
+
+            // Combine noise layers
+            float caveDensity = (caveNoise1 + caveNoise2 * 0.5f + caveNoise3 * 0.3f) / 1.8f;
+
+            // Add depth-based variation (more caves at certain depths)
+            float depthFactor = Mathf.Sin((worldY - BASE_HEIGHT) / 200f) * 0.1f;
+            caveDensity += depthFactor;
+
+            // Threshold for cave formation (adjust for more/fewer caves)
+            float caveThreshold = 0.35f;
+
+            // More caves at mid-depths
+            if (worldY > BASE_HEIGHT - 100 && worldY < BASE_HEIGHT + 100)
+            {
+                caveThreshold -= 0.05f; // Easier to form caves at mid-depths
+            }
+
+            return caveDensity > caveThreshold;
         }
     }
 }
