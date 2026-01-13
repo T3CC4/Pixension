@@ -100,10 +100,8 @@ namespace Pixension.Editor
                 meshFilter = meshObject.AddComponent<MeshFilter>();
                 meshRenderer = meshObject.AddComponent<MeshRenderer>();
 
-                // Verwende Standard-Shader für Editor
-                Material mat = new Material(Shader.Find("Standard"));
-                mat.SetFloat("_Glossiness", 0f);
-                meshRenderer.material = mat;
+                // Use VoxelMaterialManager for proper vertex color rendering
+                meshRenderer.material = Voxels.VoxelMaterialManager.Instance.GetMaterial();
             }
         }
 
@@ -138,7 +136,7 @@ namespace Pixension.Editor
 
             Utilities.MeshBuilder builder = new Utilities.MeshBuilder();
 
-            // Finde Bounds für optimierte Mesh-Generierung
+            // Finde Bounds fï¿½r optimierte Mesh-Generierung
             GetStructureBounds(out Vector3Int min, out Vector3Int max);
 
             // Nur bauen wenn Voxels vorhanden
@@ -223,7 +221,7 @@ namespace Pixension.Editor
                 return;
             }
 
-            // Prüfe ob bereits Entity an Position
+            // Prï¿½fe ob bereits Entity an Position
             EditorBlockEntity existing = editorEntities.Find(e => e.position == position);
             if (existing != null)
             {
@@ -290,7 +288,7 @@ namespace Pixension.Editor
         {
             Utilities.MeshBuilder builder = new Utilities.MeshBuilder();
 
-            // Finde Bounds für optimierte Mesh-Generierung
+            // Finde Bounds fï¿½r optimierte Mesh-Generierung
             GetStructureBounds(out Vector3Int min, out Vector3Int max);
 
             // Nur bauen wenn Voxels vorhanden
@@ -321,7 +319,7 @@ namespace Pixension.Editor
                         visibleFaces[4] = y >= max.y || !editorVoxels[x, y + 1, z].IsSolid;
                         visibleFaces[5] = y <= min.y || !editorVoxels[x, y - 1, z].IsSolid;
 
-                        // Position relativ zum Minimum (für Export)
+                        // Position relativ zum Minimum (fï¿½r Export)
                         Vector3 position = new Vector3(x - min.x, y - min.y, z - min.z);
                         builder.AddCube(position, voxel.color, visibleFaces);
                     }
@@ -332,7 +330,7 @@ namespace Pixension.Editor
             Debug.Log($"Optimized mesh built: {mesh.vertexCount} vertices, {mesh.triangles.Length / 3} triangles");
 
 #if UNITY_EDITOR
-            // Speichere Mesh als Asset wenn gewünscht
+            // Speichere Mesh als Asset wenn gewï¿½nscht
             if (saveMeshAsAsset && mesh != null)
             {
                 string meshPath = $"Assets/Meshes/{assetName}.asset";
@@ -513,7 +511,7 @@ namespace Pixension.Editor
                     max.z - min.z + 1
                 );
 
-                // Zähle Solid Voxels
+                // Zï¿½hle Solid Voxels
                 int solidCount = 0;
                 for (int x = min.x; x <= max.x; x++)
                 {
@@ -548,9 +546,8 @@ namespace Pixension.Editor
             filter.mesh = previewMesh;
 
             MeshRenderer renderer = previewObject.AddComponent<MeshRenderer>();
-            Material mat = new Material(Shader.Find("Standard"));
-            mat.SetFloat("_Glossiness", 0f);
-            renderer.material = mat;
+            // Use VoxelMaterialManager for proper vertex color rendering
+            renderer.material = Voxels.VoxelMaterialManager.Instance.GetMaterial();
 
             Debug.Log("Preview object created");
             return previewObject;
