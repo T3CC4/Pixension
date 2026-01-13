@@ -25,6 +25,7 @@ namespace Pixension.WorldGen
         protected Structures.StructurePlacementGrid structureGrid;
         protected Structures.StructurePlacer structurePlacer;
         protected List<Structures.BlockEntityPlacement> pendingEntities;
+        protected Voxels.BlockRegistry blockRegistry;
 
         public WorldGenerator(int seed, string id)
         {
@@ -34,6 +35,7 @@ namespace Pixension.WorldGen
             this.structureGrid = new Structures.StructurePlacementGrid(seed, Structures.StructureLoader.Instance);
             this.structurePlacer = new Structures.StructurePlacer(Voxels.ChunkManager.Instance);
             this.pendingEntities = new List<Structures.BlockEntityPlacement>();
+            this.blockRegistry = Voxels.BlockRegistry.Instance;
         }
 
         public abstract void GenerateChunkTerrain(Voxels.Chunk chunk);
@@ -94,9 +96,12 @@ namespace Pixension.WorldGen
 
         public virtual int GetTerrainHeight(int worldX, int worldZ)
         {
-            float noiseValue = noise.Get2DNoise(worldX, worldZ, 100f, 4, 0.5f);
-            int height = Mathf.RoundToInt((noiseValue + 1f) * 32f);
-            return Mathf.Clamp(height, 0, 128);
+            // Default implementation - should be overridden by specific generators
+            float noiseValue = noise.Get2DNoise(worldX, worldZ, 200f, 4, 0.5f);
+            int baseHeight = 1024;
+            int variation = Mathf.RoundToInt(noiseValue * 200f);
+            int height = baseHeight + variation;
+            return Mathf.Clamp(height, 0, 2048);
         }
 
         public virtual void OnChunkGenerated(Voxels.Chunk chunk)

@@ -5,9 +5,45 @@ namespace Pixension.WorldGen
 {
     public class GrasslandGenerator : WorldGenerator
     {
-        private const int WATER_LEVEL = 32;
+        // World height constants
+        private const int MIN_WORLD_HEIGHT = 0;
+        private const int MAX_WORLD_HEIGHT = 2048;
+        private const int BASE_HEIGHT = 1024;
+        private const int WATER_LEVEL = 1000;
 
-        public GrasslandGenerator(int seed) : base(seed, "grassland") { }
+        public GrasslandGenerator(int seed) : base(seed, "grassland")
+        {
+            RegisterCustomBlocks();
+        }
+
+        /// <summary>
+        /// Registers custom blocks specific to this generator
+        /// </summary>
+        private void RegisterCustomBlocks()
+        {
+            // Register grassland-specific block variations
+            // These can be used by other generators or systems
+
+            // Mountain stone (lighter for high altitude)
+            blockRegistry.RegisterBlock("grassland:stone_mountain", new Voxels.VoxelData(
+                Voxels.VoxelType.Solid,
+                new Color(0.52f, 0.52f, 0.55f)
+            ));
+
+            // Rich soil (for fertile areas)
+            blockRegistry.RegisterBlock("grassland:dirt_rich", new Voxels.VoxelData(
+                Voxels.VoxelType.Solid,
+                new Color(0.4f, 0.25f, 0.15f)
+            ));
+
+            // Wet sand (near water)
+            blockRegistry.RegisterBlock("grassland:sand_wet", new Voxels.VoxelData(
+                Voxels.VoxelType.Solid,
+                new Color(0.65f, 0.58f, 0.4f)
+            ));
+
+            Debug.Log("GrasslandGenerator: Registered custom blocks");
+        }
 
         public override void GenerateChunkTerrain(Voxels.Chunk chunk)
         {
@@ -19,132 +55,178 @@ namespace Pixension.WorldGen
                     int worldZ = chunk.chunkPosition.z * Voxels.Chunk.CHUNK_SIZE + z;
 
                     // === 1. CONTINENTAL SHAPE (VERY LARGE SCALE) ===
-                    float continental = noise.Get2DNoise(worldX, worldZ, 1200f, 3, 0.45f, NoiseType.Simplex);
+                    float continental = noise.Get2DNoise(worldX, worldZ, 1500f, 3, 0.45f, NoiseType.Simplex);
                     continental = Mathf.Clamp01((continental + 1f) * 0.5f);
                     continental = Mathf.Pow(continental, 1.5f);
 
                     // === 2. MOUNTAIN RIDGES ===
-                    float ridge = noise.Get2DNoise(worldX + 2000, worldZ + 2000, 200f, 5, 0.5f, NoiseType.Ridged);
+                    float ridge = noise.Get2DNoise(worldX + 2000, worldZ + 2000, 300f, 5, 0.5f, NoiseType.Ridged);
                     ridge = Mathf.Pow(ridge, 1.8f);
 
                     // === 3. ROLLING HILLS ===
-                    float hills = noise.Get2DNoise(worldX + 5000, worldZ + 5000, 120f, 4, 0.55f, NoiseType.Simplex);
+                    float hills = noise.Get2DNoise(worldX + 5000, worldZ + 5000, 150f, 4, 0.55f, NoiseType.Simplex);
                     hills = hills * 0.5f + 0.5f; // Normalize to 0-1
 
                     // === 4. VALLEYS (using cellular noise for interesting patterns) ===
-                    float valley = noise.Get2DNoise(worldX - 2000, worldZ - 2000, 400f, 2, 0.5f, NoiseType.Cellular);
+                    float valley = noise.Get2DNoise(worldX - 2000, worldZ - 2000, 500f, 2, 0.5f, NoiseType.Cellular);
                     valley = Mathf.Abs(valley);
                     valley = Mathf.Pow(valley, 1.5f);
 
                     // === 5. DETAIL NOISE (using billow for puffy terrain) ===
-                    float detail = noise.Get2DNoise(worldX, worldZ, 25f, 3, 0.6f, NoiseType.Billow);
+                    float detail = noise.Get2DNoise(worldX, worldZ, 35f, 3, 0.6f, NoiseType.Billow);
 
                     // === 6. EROSION/FLATNESS NEAR WATER ===
-                    float erosion = noise.Get2DNoise(worldX + 7000, worldZ + 7000, 180f, 2, 0.5f);
+                    float erosion = noise.Get2DNoise(worldX + 7000, worldZ + 7000, 250f, 2, 0.5f);
                     erosion = Mathf.Clamp01((erosion + 1f) * 0.5f);
 
                     // === HEIGHT COMPOSITION ===
                     float heightFloat =
-                        WATER_LEVEL +                 // Base water level
-                        continental * 80f +           // Massive height differences
-                        ridge * 50f +                 // Sharp mountain ridges
-                        hills * 20f +                 // Rolling hills
-                        -valley * 25f +               // Valleys
-                        detail * 3f;                  // Surface detail
+                        BASE_HEIGHT +                 // Base world height (1024)
+                        continental * 300f +          // Massive height differences (-300 to +300)
+                        ridge * 200f +                // Sharp mountain ridges
+                        hills * 80f +                 // Rolling hills
+                        -valley * 100f +              // Valleys
+                        detail * 8f;                  // Surface detail
 
                     // Apply erosion to flatten areas near water level
                     float distanceFromWater = Mathf.Abs(heightFloat - WATER_LEVEL);
-                    if (distanceFromWater < 10f)
+                    if (distanceFromWater < 20f)
                     {
-                        float erosionFactor = 1f - (distanceFromWater / 10f);
-                        heightFloat = Mathf.Lerp(heightFloat, WATER_LEVEL + (heightFloat > WATER_LEVEL ? 2f : 0f), erosionFactor * 0.5f);
+                        float erosionFactor = 1f - (distanceFromWater / 20f);
+                        float targetHeight = WATER_LEVEL + (heightFloat > WATER_LEVEL ? 3f : 0f);
+                        heightFloat = Mathf.Lerp(heightFloat, targetHeight, erosionFactor * 0.6f);
                     }
 
-                    int height = Mathf.RoundToInt(heightFloat);
+                    // Clamp height to world limits
+                    int height = Mathf.RoundToInt(Mathf.Clamp(heightFloat, MIN_WORLD_HEIGHT + 1, MAX_WORLD_HEIGHT - 1));
 
                     // === OPTIONAL: TERRACING for fantasy look (comment out for natural look) ===
-                    // int terraceStep = 4;
+                    // int terraceStep = 8;
                     // height = (height / terraceStep) * terraceStep;
 
                     for (int y = 0; y < Voxels.Chunk.CHUNK_SIZE; y++)
                     {
                         int worldY = chunk.chunkPosition.y * Voxels.Chunk.CHUNK_SIZE + y;
+
+                        // Skip if outside world height limits
+                        if (worldY < MIN_WORLD_HEIGHT || worldY >= MAX_WORLD_HEIGHT)
+                        {
+                            chunk.voxels[x, y, z] = Voxels.VoxelData.Air;
+                            continue;
+                        }
+
                         Voxels.VoxelData voxel;
 
-                        if (worldY == 0)
+                        if (worldY == MIN_WORLD_HEIGHT)
                         {
-                            // Bedrock
-                            voxel = new Voxels.VoxelData(
-                                Voxels.VoxelType.Solid,
-                                new Color(0.12f, 0.12f, 0.12f)
-                            );
+                            // Bedrock layer at absolute bottom
+                            voxel = blockRegistry.GetBlock("bedrock");
                         }
-                        else if (worldY < height - 8)
+                        else if (worldY < height - 12)
                         {
-                            // Deep stone
-                            float stoneVariation = noise.Get3DNoise(worldX, worldY, worldZ, 30f) * 0.1f;
-                            voxel = new Voxels.VoxelData(
-                                Voxels.VoxelType.Solid,
-                                new Color(0.42f + stoneVariation, 0.42f + stoneVariation, 0.42f + stoneVariation)
-                            );
+                            // Deep stone with variation
+                            float stoneVariation = noise.Get3DNoise(worldX, worldY, worldZ, 40f, NoiseType.Simplex);
+
+                            if (stoneVariation > 0.3f)
+                            {
+                                voxel = blockRegistry.GetBlock("stone_light");
+                            }
+                            else if (stoneVariation < -0.3f)
+                            {
+                                voxel = blockRegistry.GetBlock("stone_dark");
+                            }
+                            else
+                            {
+                                voxel = blockRegistry.GetBlock("stone");
+                            }
                         }
                         else if (worldY < height - 1)
                         {
-                            // Dirt layer
-                            float dirtVariation = noise.Get3DNoise(worldX, worldY, worldZ, 20f) * 0.05f;
-                            voxel = new Voxels.VoxelData(
-                                Voxels.VoxelType.Solid,
-                                new Color(0.5f + dirtVariation, 0.32f + dirtVariation, 0.18f + dirtVariation)
-                            );
+                            // Dirt layer with variation
+                            float dirtVariation = noise.Get3DNoise(worldX, worldY, worldZ, 25f, NoiseType.Perlin);
+
+                            if (dirtVariation > 0.4f && height > WATER_LEVEL + 20)
+                            {
+                                // Rich soil in high, vegetated areas
+                                voxel = blockRegistry.GetBlock("grassland:dirt_rich");
+                            }
+                            else if (dirtVariation < -0.3f)
+                            {
+                                voxel = blockRegistry.GetBlock("dirt_dark");
+                            }
+                            else
+                            {
+                                voxel = blockRegistry.GetBlock("dirt");
+                            }
                         }
                         else if (worldY == height)
                         {
-                            // Surface layer - grass or sand near water
-                            bool nearWater = height <= WATER_LEVEL + 2;
+                            // Surface layer - grass, sand, or mountain stone
+                            bool nearWater = height <= WATER_LEVEL + 5;
+                            bool isHigh = height > BASE_HEIGHT + 200;
 
                             if (nearWater)
                             {
-                                // Sand beaches
-                                float sandVariation = noise.Get2DNoise(worldX + 9000, worldZ + 9000, 15f, 1, 1f);
-                                Color sandColor = Color.Lerp(
-                                    new Color(0.76f, 0.7f, 0.5f),
-                                    new Color(0.9f, 0.85f, 0.65f),
-                                    sandVariation * 0.5f + 0.5f
-                                );
-                                voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, sandColor);
+                                // Sand beaches with variation
+                                float sandVariation = noise.Get2DNoise(worldX + 9000, worldZ + 9000, 20f, 2, 1f);
+
+                                if (Mathf.Abs(height - WATER_LEVEL) <= 2)
+                                {
+                                    // Wet sand right at water line
+                                    voxel = blockRegistry.GetBlock("grassland:sand_wet");
+                                }
+                                else if (sandVariation > 0.3f)
+                                {
+                                    voxel = blockRegistry.GetBlock("sand_light");
+                                }
+                                else if (sandVariation < -0.3f)
+                                {
+                                    voxel = blockRegistry.GetBlock("sand_dark");
+                                }
+                                else
+                                {
+                                    voxel = blockRegistry.GetBlock("sand");
+                                }
+                            }
+                            else if (isHigh)
+                            {
+                                // Mountain stone at high elevations
+                                voxel = blockRegistry.GetBlock("grassland:stone_mountain");
                             }
                             else
                             {
                                 // Grass variation based on height and moisture
-                                float grassNoise = noise.Get2DNoise(worldX + 5000, worldZ + 5000, 20f, 1, 1f);
-                                float moisture = noise.Get2DNoise(worldX, worldZ, 300f, 2, 0.5f) * 0.5f + 0.5f;
+                                float grassNoise = noise.Get2DNoise(worldX + 5000, worldZ + 5000, 25f, 2, 1f);
+                                float moisture = noise.Get2DNoise(worldX, worldZ, 400f, 2, 0.5f) * 0.5f + 0.5f;
 
-                                // Different grass colors based on height
-                                Color grassColorLow = Color.Lerp(
-                                    new Color(0.2f, 0.55f, 0.25f),
-                                    new Color(0.3f, 0.7f, 0.3f),
-                                    moisture
-                                );
+                                // Height-based grass color selection
+                                float heightFactor = Mathf.Clamp01((height - WATER_LEVEL) / 200f);
 
-                                Color grassColorHigh = Color.Lerp(
-                                    new Color(0.4f, 0.6f, 0.4f),
-                                    new Color(0.5f, 0.75f, 0.5f),
-                                    moisture
-                                );
-
-                                float heightFactor = Mathf.Clamp01((height - WATER_LEVEL) / 60f);
-                                Color grassColor = Color.Lerp(grassColorLow, grassColorHigh, heightFactor);
-
-                                // Add variation
-                                grassColor = Color.Lerp(grassColor, grassColor * 1.2f, grassNoise * 0.3f);
-
-                                voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, grassColor);
+                                if (moisture < 0.3f)
+                                {
+                                    // Dry grass
+                                    voxel = blockRegistry.GetBlock("grass_dry");
+                                }
+                                else if (heightFactor < 0.3f)
+                                {
+                                    // Low elevation - dark grass
+                                    voxel = grassNoise > 0.2f ?
+                                        blockRegistry.GetBlock("grass") :
+                                        blockRegistry.GetBlock("grass_dark");
+                                }
+                                else
+                                {
+                                    // High elevation - lighter grass
+                                    voxel = grassNoise > 0.2f ?
+                                        blockRegistry.GetBlock("grass_light") :
+                                        blockRegistry.GetBlock("grass");
+                                }
                             }
                         }
                         else if (worldY <= WATER_LEVEL && worldY > height)
                         {
                             // Water - fill up to water level
-                            voxel = Voxels.VoxelData.Water;
+                            voxel = blockRegistry.GetBlock("water");
                         }
                         else
                         {
@@ -168,6 +250,30 @@ namespace Pixension.WorldGen
         {
             // Beautiful sky for grassland biome
             return new Color(0.53f, 0.75f, 0.95f);
+        }
+
+        /// <summary>
+        /// Gets the height limits for this generator
+        /// </summary>
+        public static (int min, int max) GetHeightLimits()
+        {
+            return (MIN_WORLD_HEIGHT, MAX_WORLD_HEIGHT);
+        }
+
+        /// <summary>
+        /// Gets the water level for this generator
+        /// </summary>
+        public static int GetWaterLevel()
+        {
+            return WATER_LEVEL;
+        }
+
+        /// <summary>
+        /// Gets the base/average terrain height
+        /// </summary>
+        public static int GetBaseHeight()
+        {
+            return BASE_HEIGHT;
         }
     }
 }
