@@ -5,9 +5,7 @@ namespace Pixension.WorldGen
 {
     public class GrasslandGenerator : WorldGenerator
     {
-        public GrasslandGenerator(int seed) : base(seed, "grassland")
-        {
-        }
+        public GrasslandGenerator(int seed) : base(seed, "grassland") { }
 
         public override void GenerateChunkTerrain(Voxels.Chunk chunk)
         {
@@ -18,41 +16,77 @@ namespace Pixension.WorldGen
                     int worldX = chunk.chunkPosition.x * Voxels.Chunk.CHUNK_SIZE + x;
                     int worldZ = chunk.chunkPosition.z * Voxels.Chunk.CHUNK_SIZE + z;
 
-                    // Korrigierte Noise-Parameter:
-                    // scale: 100 = sanfte Hügel
-                    // octaves: 4 = gute Details
-                    // persistence: 0.5 = balanced
-                    float noiseValue = noise.Get2DNoise(worldX, worldZ, 100f, 4, 0.5f);
+                    // === 1. CONTINENTAL SHAPE (VERY LARGE SCALE) ===
+                    float continental = noise.Get2DNoise(worldX, worldZ, 900f, 2, 0.4f);
+                    continental = Mathf.Clamp01((continental + 1f) * 0.5f);
+                    continental = Mathf.Pow(continental, 1.8f); // dramatic height bias
 
-                    // noiseValue ist -1 bis 1, konvertiere zu Höhe
-                    // Basis-Höhe 50, Variation ±15
-                    int height = Mathf.RoundToInt((noiseValue * 15f) + 50f);
+                    // === 2. RIDGE / MOUNTAIN NOISE ===
+                    float ridge = noise.Get2DNoise(worldX + 2000, worldZ + 2000, 160f, 4, 0.5f);
+                    ridge = 1f - Mathf.Abs(ridge); // sharp ridges
+                    ridge = Mathf.Pow(ridge, 2.5f);
+
+                    // === 3. VALLEY NOISE ===
+                    float valley = noise.Get2DNoise(worldX - 2000, worldZ - 2000, 300f, 2, 0.5f);
+                    valley = Mathf.Abs(valley);
+                    valley = Mathf.Pow(valley, 2f);
+
+                    // === 4. DETAIL NOISE ===
+                    float detail = noise.Get2DNoise(worldX, worldZ, 35f, 2, 0.6f);
+
+                    // === HEIGHT COMPOSITION ===
+                    float heightFloat =
+                        35f +                         // base world height
+                        continental * 70f +           // massive height differences
+                        ridge * 40f -                 // mountains
+                        valley * 30f +                // valleys
+                        detail * 4f;                  // surface detail
+
+                    int height = Mathf.RoundToInt(heightFloat);
+
+                    // === TERRACING (FANTASY LOOK) ===
+                    int terraceStep = 4;
+                    height = (height / terraceStep) * terraceStep;
 
                     for (int y = 0; y < Voxels.Chunk.CHUNK_SIZE; y++)
                     {
                         int worldY = chunk.chunkPosition.y * Voxels.Chunk.CHUNK_SIZE + y;
-
                         Voxels.VoxelData voxel;
 
                         if (worldY == 0)
                         {
-                            // Bedrock
-                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, new Color(0.2f, 0.2f, 0.2f));
+                            voxel = new Voxels.VoxelData(
+                                Voxels.VoxelType.Solid,
+                                new Color(0.12f, 0.12f, 0.12f)
+                            );
                         }
-                        else if (worldY >= 1 && worldY <= height - 4)
+                        else if (worldY < height - 6)
                         {
-                            // Stein
-                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, new Color(0.5f, 0.5f, 0.5f));
+                            // Deep stone
+                            voxel = new Voxels.VoxelData(
+                                Voxels.VoxelType.Solid,
+                                new Color(0.42f, 0.42f, 0.42f)
+                            );
                         }
-                        else if (worldY >= height - 3 && worldY <= height - 1)
+                        else if (worldY < height - 1)
                         {
-                            // Erde
-                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, new Color(0.55f, 0.35f, 0.2f));
+                            // Dirt
+                            voxel = new Voxels.VoxelData(
+                                Voxels.VoxelType.Solid,
+                                new Color(0.5f, 0.32f, 0.18f)
+                            );
                         }
                         else if (worldY == height)
                         {
-                            // Gras
-                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, new Color(0.3f, 0.7f, 0.2f));
+                            // Grass variation
+                            float grassNoise = noise.Get2DNoise(worldX + 5000, worldZ + 5000, 20f, 1, 1f);
+                            Color grassColor = Color.Lerp(
+                                new Color(0.22f, 0.6f, 0.25f),
+                                new Color(0.35f, 0.8f, 0.35f),
+                                grassNoise * 0.5f + 0.5f
+                            );
+
+                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, grassColor);
                         }
                         else
                         {
@@ -64,18 +98,18 @@ namespace Pixension.WorldGen
                 }
             }
 
-            // Markiere Chunk als dirty für Mesh-Generierung
             chunk.SetDirty();
         }
 
-        public override List<WorldGen.StructurePlacement> GetStructuresForChunk(Vector3Int chunkPos)
+        public override List<StructurePlacement> GetStructuresForChunk(Vector3Int chunkPos)
         {
             return structureGrid.GetPlacementsForChunk(chunkPos, generatorID, GetTerrainHeight);
         }
 
         public override Color GetSkyColor()
         {
-            return new Color(0.5f, 0.7f, 1f);
+            // Slightly more epic fantasy sky
+            return new Color(0.45f, 0.65f, 0.95f);
         }
     }
 }
