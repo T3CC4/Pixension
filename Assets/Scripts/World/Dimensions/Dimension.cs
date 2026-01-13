@@ -37,7 +37,35 @@ namespace Pixension.Dimensions
 
             chunks[chunkPos] = chunk;
 
+            // Mark neighboring chunks as dirty so they regenerate their meshes with correct face culling
+            MarkNeighborsDirty(chunkPos);
+
             return chunk;
+        }
+
+        private void MarkNeighborsDirty(Vector3Int chunkPos)
+        {
+            // Check all 6 neighboring chunks
+            Vector3Int[] neighborOffsets = new Vector3Int[]
+            {
+                new Vector3Int(1, 0, 0),   // Right
+                new Vector3Int(-1, 0, 0),  // Left
+                new Vector3Int(0, 1, 0),   // Up
+                new Vector3Int(0, -1, 0),  // Down
+                new Vector3Int(0, 0, 1),   // Forward
+                new Vector3Int(0, 0, -1)   // Back
+            };
+
+            foreach (Vector3Int offset in neighborOffsets)
+            {
+                Vector3Int neighborPos = chunkPos + offset;
+                if (chunks.TryGetValue(neighborPos, out Voxels.Chunk neighbor))
+                {
+                    neighbor.SetDirty();
+                    // Notify ChunkManager to rebuild this chunk
+                    Voxels.ChunkManager.Instance?.MarkChunkDirty(neighborPos);
+                }
+            }
         }
 
         public void UnloadChunk(Vector3Int chunkPos)

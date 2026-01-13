@@ -70,16 +70,17 @@ namespace Pixension.WorldGen
                     int worldX = chunk.chunkPosition.x * Voxels.Chunk.CHUNK_SIZE + x;
                     int worldZ = chunk.chunkPosition.z * Voxels.Chunk.CHUNK_SIZE + z;
 
-                    // Get biome at this position
+                    // Get biome at this position with blending
                     BiomeData biome = biomeGenerator.GetBiome(worldX, worldZ);
+                    float biomeBlend = biomeGenerator.GetBiomeBlend(worldX, worldZ, 4);
 
                     // Get climate parameters for additional effects
                     float temperature = biomeGenerator.GetTemperature(worldX, worldZ);
                     float humidity = biomeGenerator.GetHumidity(worldX, worldZ);
                     float continental = biomeGenerator.GetContinentalness(worldX, worldZ);
 
-                    // Generate height using biome-modified noise
-                    int height = GenerateBiomeHeight(worldX, worldZ, biome, continental);
+                    // Generate height using biome-modified noise with blending
+                    int height = GenerateBiomeHeightBlended(worldX, worldZ, biome, continental, biomeBlend);
 
                     // Generate column
                     for (int y = 0; y < Voxels.Chunk.CHUNK_SIZE; y++)
@@ -93,13 +94,73 @@ namespace Pixension.WorldGen
                             continue;
                         }
 
-                        Voxels.VoxelData voxel = GenerateVoxel(worldX, worldY, worldZ, height, biome, temperature, humidity);
+                        // Check for cave
+                        bool isCave = GenerateCave(worldX, worldY, worldZ, height);
+
+                        Voxels.VoxelData voxel;
+                        if (isCave && worldY < height && worldY > MIN_WORLD_HEIGHT + 1)
+                        {
+                            // Cave - hollow out unless underwater
+                            if (worldY <= WATER_LEVEL && worldY > height - 10)
+                            {
+                                voxel = blockRegistry.GetBlock("water");
+                            }
+                            else
+                            {
+                                voxel = Voxels.VoxelData.Air;
+                            }
+                        }
+                        else
+                        {
+                            voxel = GenerateVoxel(worldX, worldY, worldZ, height, biome, temperature, humidity);
+                        }
+
                         chunk.voxels[x, y, z] = voxel;
                     }
                 }
             }
 
             chunk.SetDirty();
+        }
+
+        /// <summary>
+        /// Generates terrain height with biome blending for smooth transitions
+        /// </summary>
+        private int GenerateBiomeHeightBlended(int worldX, int worldZ, BiomeData centerBiome, float continental, float blendFactor)
+        {
+            if (blendFactor < 0.2f)
+            {
+                // Pure biome, no blending needed
+                return GenerateBiomeHeight(worldX, worldZ, centerBiome, continental);
+            }
+
+            // Sample neighboring biomes for blending
+            int sampleRadius = 8;
+            float totalHeight = 0f;
+            float totalWeight = 0f;
+
+            for (int dx = -sampleRadius; dx <= sampleRadius; dx += sampleRadius)
+            {
+                for (int dz = -sampleRadius; dz <= sampleRadius; dz += sampleRadius)
+                {
+                    BiomeData neighborBiome = biomeGenerator.GetBiome(worldX + dx, worldZ + dz);
+                    float neighborContinental = biomeGenerator.GetContinentalness(worldX + dx, worldZ + dz);
+
+                    float distance = Mathf.Sqrt(dx * dx + dz * dz);
+                    float weight = 1f / (1f + distance * 0.1f);
+
+                    int neighborHeight = GenerateBiomeHeight(worldX + dx, worldZ + dz, neighborBiome, neighborContinental);
+                    totalHeight += neighborHeight * weight;
+                    totalWeight += weight;
+                }
+            }
+
+            float blendedHeight = totalHeight / totalWeight;
+            float pureHeight = GenerateBiomeHeight(worldX, worldZ, centerBiome, continental);
+
+            // Lerp based on blend factor
+            float finalHeight = Mathf.Lerp(pureHeight, blendedHeight, blendFactor * 0.5f);
+            return Mathf.RoundToInt(finalHeight);
         }
 
         /// <summary>
@@ -290,6 +351,47 @@ namespace Pixension.WorldGen
 
             // Between surface and height (shouldn't happen but fallback)
             return blockRegistry.GetBlock(biome.fillerBlockID);
+        }
+
+        /// <summary>
+        /// Generates caves using 3D noise
+        /// Returns true if the position should be carved out as a cave
+        /// </summary>
+        private bool GenerateCave(int worldX, int worldY, int worldZ, int surfaceHeight)
+        {
+            // Don't generate caves too close to surface or bedrock
+            if (worldY > surfaceHeight - 5 || worldY < MIN_WORLD_HEIGHT + 3)
+            {
+                return false;
+            }
+
+            // Use 3D noise for cave generation
+            // Layer 1: Large cave systems
+            float caveNoise1 = noise.Get3DNoise(worldX, worldY, worldZ, 80f, NoiseType.Simplex);
+
+            // Layer 2: Smaller tunnels
+            float caveNoise2 = noise.Get3DNoise(worldX + 1000, worldY + 1000, worldZ + 1000, 40f, NoiseType.Simplex);
+
+            // Layer 3: Vertical variation
+            float caveNoise3 = noise.Get3DNoise(worldX - 1000, worldY - 1000, worldZ - 1000, 60f, NoiseType.Ridged);
+
+            // Combine noise layers
+            float caveDensity = (caveNoise1 + caveNoise2 * 0.5f + caveNoise3 * 0.3f) / 1.8f;
+
+            // Add depth-based variation (more caves at certain depths)
+            float depthFactor = Mathf.Sin((worldY - BASE_HEIGHT) / 200f) * 0.1f;
+            caveDensity += depthFactor;
+
+            // Threshold for cave formation (adjust for more/fewer caves)
+            float caveThreshold = 0.35f;
+
+            // More caves at mid-depths
+            if (worldY > BASE_HEIGHT - 100 && worldY < BASE_HEIGHT + 100)
+            {
+                caveThreshold -= 0.05f; // Easier to form caves at mid-depths
+            }
+
+            return caveDensity > caveThreshold;
         }
 
         public override List<StructurePlacement> GetStructuresForChunk(Vector3Int chunkPos)
