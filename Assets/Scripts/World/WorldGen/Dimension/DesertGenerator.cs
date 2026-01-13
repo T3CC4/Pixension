@@ -18,8 +18,13 @@ namespace Pixension.WorldGen
                     int worldX = chunk.chunkPosition.x * Voxels.Chunk.CHUNK_SIZE + x;
                     int worldZ = chunk.chunkPosition.z * Voxels.Chunk.CHUNK_SIZE + z;
 
-                    float noiseValue = noise.Get2DNoise(worldX, worldZ, 0.01f, 3, 0.5f);
-                    int height = Mathf.RoundToInt(noiseValue * 15f + 35f);
+                    // Wüsten-Terrain: größere Wellen, weniger Details
+                    // scale: 150 = sanftere Dünen
+                    // octaves: 3 = weniger Details als Grassland
+                    float noiseValue = noise.Get2DNoise(worldX, worldZ, 150f, 3, 0.5f);
+
+                    // Wüste: flacher, Basis 45, Variation ±10
+                    int height = Mathf.RoundToInt((noiseValue * 10f) + 45f);
 
                     for (int y = 0; y < Voxels.Chunk.CHUNK_SIZE; y++)
                     {
@@ -29,19 +34,23 @@ namespace Pixension.WorldGen
 
                         if (worldY == 0)
                         {
-                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, Color.black);
+                            // Bedrock
+                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, new Color(0.2f, 0.2f, 0.2f));
                         }
                         else if (worldY >= 1 && worldY <= height - 4)
                         {
-                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, Color.gray);
+                            // Sandstein
+                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, new Color(0.7f, 0.6f, 0.5f));
                         }
                         else if (worldY >= height - 3 && worldY <= height - 1)
                         {
-                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, new Color(0.7f, 0.6f, 0.5f));
+                            // Sand (dunkel)
+                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, new Color(0.8f, 0.7f, 0.5f));
                         }
                         else if (worldY == height)
                         {
-                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, new Color(0.9f, 0.8f, 0.6f));
+                            // Sand (hell)
+                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, new Color(0.95f, 0.85f, 0.6f));
                         }
                         else
                         {
@@ -52,6 +61,9 @@ namespace Pixension.WorldGen
                     }
                 }
             }
+
+            // Markiere Chunk als dirty für Mesh-Generierung
+            chunk.SetDirty();
         }
 
         public override List<StructurePlacement> GetStructuresForChunk(Vector3Int chunkPos)

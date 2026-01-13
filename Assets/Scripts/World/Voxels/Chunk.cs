@@ -16,6 +16,7 @@ namespace Pixension.Voxels
 
         public MeshFilter meshFilter;
         public MeshRenderer meshRenderer;
+        public MeshCollider meshCollider;
 
         public Chunk(Vector3Int position)
         {
@@ -46,6 +47,10 @@ namespace Pixension.Voxels
             meshFilter = gameObject.AddComponent<MeshFilter>();
             meshRenderer = gameObject.AddComponent<MeshRenderer>();
             meshRenderer.material = VoxelMaterialManager.Instance.GetMaterial();
+
+            // MeshCollider hinzufügen
+            meshCollider = gameObject.AddComponent<MeshCollider>();
+            meshCollider.convex = false; // Non-convex für präzise Kollision
         }
 
         public VoxelData GetVoxel(int x, int y, int z)
@@ -125,7 +130,120 @@ namespace Pixension.Voxels
             if (meshFilter != null)
             {
                 meshFilter.mesh = mesh;
+
+                // Setze Materials für alle Submeshes
+                if (meshRenderer != null && mesh != null)
+                {
+                    Material voxelMaterial = VoxelMaterialManager.Instance.GetMaterial();
+
+                    // Erstelle Material-Array für alle Submeshes
+                    Material[] materials = new Material[mesh.subMeshCount];
+                    for (int i = 0; i < mesh.subMeshCount; i++)
+                    {
+                        materials[i] = voxelMaterial;
+                    }
+
+                    meshRenderer.materials = materials;
+                }
+
+                // Update MeshCollider
+                if (meshCollider != null && mesh != null)
+                {
+                    meshCollider.sharedMesh = null; // Clear alte Mesh
+                    meshCollider.sharedMesh = mesh; // Setze neue Mesh
+                }
             }
+        }
+
+        public ChunkData Serialize()
+        {
+            ChunkData data = new ChunkData(chunkPosition);
+
+            // Nur modifizierte Voxels serialisieren
+            if (modifiedVoxelPositions.Count > 0)
+            {
+                data.modifiedVoxels = new VoxelData[modifiedVoxelPositions.Count];
+                data.modifiedPositions = new Vector3Int[modifiedVoxelPositions.Count];
+
+                int index = 0;
+                foreach (Vector3Int pos in modifiedVoxelPositions)
+                {
+                    data.modifiedPositions[index] = pos;
+                    data.modifiedVoxels[index] = voxels[pos.x, pos.y, pos.z];
+                    index++;
+                }
+            }
+
+            // Serialisiere Entities in diesem Chunk
+            List<BlockEntitySaveData> entityList = new List<BlockEntitySaveData>();
+
+            foreach (GameObject entityObject in entities)
+            {
+                if (entityObject == null)
+                    continue;
+
+                Entities.BlockEntity entity = entityObject.GetComponent<Entities.BlockEntity>();
+                if (entity != null)
+                {
+                    entityList.Add(new BlockEntitySaveData(
+                        entity.entityID,
+                        entity.worldPosition,
+                        entity.facing
+                    ));
+                }
+            }
+
+            data.entities = entityList.ToArray();
+
+            return data;
+        }
+
+        public void Deserialize(ChunkData data)
+        {
+            if (data == null)
+                return;
+
+            // Setze modifizierte Voxels
+            for (int i = 0; i < data.modifiedPositions.Length; i++)
+            {
+                Vector3Int pos = data.modifiedPositions[i];
+                VoxelData voxel = data.modifiedVoxels[i];
+
+                if (IsInBounds(pos.x, pos.y, pos.z))
+                {
+                    voxels[pos.x, pos.y, pos.z] = voxel;
+                    modifiedVoxelPositions.Add(pos);
+                }
+            }
+
+            // Recreate Entities
+            foreach (BlockEntitySaveData entityData in data.entities)
+            {
+                GameObject entityObject = Entities.BlockEntityLoader.Instance.InstantiateEntity(
+                    entityData.entityID,
+                    entityData.worldPosition,
+                    entityData.GetFacing()
+                );
+
+                if (entityObject != null)
+                {
+                    entityObject.transform.SetParent(gameObject.transform);
+                    entities.Add(entityObject);
+                }
+            }
+
+            // Chunk als dirty markieren für Mesh-Rebuild
+            isDirty = true;
+        }
+
+        public bool HasModifications()
+        {
+            return modifiedVoxelPositions.Count > 0 || entities.Count > 0;
+        }
+
+        public void ClearModifications()
+        {
+            modifiedVoxelPositions.Clear();
         }
     }
 }

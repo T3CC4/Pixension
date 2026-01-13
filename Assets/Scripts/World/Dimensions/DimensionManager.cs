@@ -103,7 +103,7 @@ namespace Pixension.Dimensions
             activeDimension.SetActive(true);
 
             RenderSettings.ambientLight = activeDimension.skyColor;
-            Camera.main.backgroundColor = activeDimension.skyColor;
+            //Camera.main.backgroundColor = activeDimension.skyColor;
 
             Voxels.ChunkManager.Instance.SetActiveDimension(activeDimension);
 

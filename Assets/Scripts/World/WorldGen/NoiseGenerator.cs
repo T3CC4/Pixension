@@ -5,14 +5,25 @@ namespace Pixension.WorldGen
     public class NoiseGenerator
     {
         private int seed;
+        private float seedOffsetX;
+        private float seedOffsetZ;
 
         public NoiseGenerator(int seed)
         {
             this.seed = seed;
+
+            // Generiere Seed-Offsets aus dem Seed
+            System.Random rng = new System.Random(seed);
+            seedOffsetX = (float)rng.NextDouble() * 10000f;
+            seedOffsetZ = (float)rng.NextDouble() * 10000f;
         }
 
         public float Get2DNoise(float x, float z, float scale, int octaves, float persistence)
         {
+            // Validierung
+            if (scale <= 0f) scale = 1f;
+            if (octaves < 1) octaves = 1;
+
             float total = 0f;
             float frequency = 1f;
             float amplitude = 1f;
@@ -20,9 +31,11 @@ namespace Pixension.WorldGen
 
             for (int i = 0; i < octaves; i++)
             {
-                float sampleX = (x / scale) * frequency + seed;
-                float sampleZ = (z / scale) * frequency + seed * 0.1f;
+                // Korrekte Noise-Berechnung mit Seed-Offset
+                float sampleX = (x * frequency / scale) + seedOffsetX;
+                float sampleZ = (z * frequency / scale) + seedOffsetZ;
 
+                // Perlin Noise gibt 0-1 zurück, konvertiere zu -1 bis 1
                 float perlinValue = Mathf.PerlinNoise(sampleX, sampleZ) * 2f - 1f;
                 total += perlinValue * amplitude;
 
@@ -31,6 +44,7 @@ namespace Pixension.WorldGen
                 frequency *= 2f;
             }
 
+            // Normalisiere auf -1 bis 1
             return total / maxValue;
         }
 

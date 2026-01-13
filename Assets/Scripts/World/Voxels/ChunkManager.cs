@@ -85,7 +85,25 @@ namespace Pixension.Voxels
                 return;
             }
 
-            CreateChunk(chunkPos);
+            Dimensions.DimensionManager dimManager = Dimensions.DimensionManager.Instance;
+            if (dimManager == null)
+                return;
+
+            Dimensions.Dimension activeDim = dimManager.GetActiveDimension();
+            if (activeDim == null)
+                return;
+
+            Chunk chunk = activeDim.GetOrCreateChunk(chunkPos);
+
+            if (chunk != null && chunk.isDirty)
+            {
+                MarkChunkDirty(chunkPos);
+            }
+            else
+            {
+                CreateChunk(chunkPos);
+            }
+
             Entities.BlockEntityManager.Instance.OnChunkLoad(chunkPos);
         }
 
@@ -95,6 +113,32 @@ namespace Pixension.Voxels
             if (activeDimension == null)
             {
                 return;
+            }
+
+            if (activeDimension.chunks.ContainsKey(chunkPos))
+            {
+                Chunk chunk = activeDimension.chunks[chunkPos];
+
+                // Entferne aus Rebuild Queue
+                Queue<Vector3Int> tempQueue = new Queue<Vector3Int>();
+                while (rebuildQueue.Count > 0)
+                {
+                    Vector3Int pos = rebuildQueue.Dequeue();
+                    if (pos != chunkPos)
+                    {
+                        tempQueue.Enqueue(pos);
+                    }
+                }
+                rebuildQueue = tempQueue;
+
+                // Zerstöre GameObject
+                if (chunk.gameObject != null)
+                {
+                    Destroy(chunk.gameObject);
+                }
+
+                // Entferne aus Dictionary
+                activeDimension.chunks.Remove(chunkPos);
             }
 
             Entities.BlockEntityManager.Instance.OnChunkUnload(chunkPos);

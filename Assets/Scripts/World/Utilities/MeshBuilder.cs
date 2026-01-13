@@ -5,16 +5,11 @@ namespace Pixension.Utilities
 {
     public class MeshBuilder
     {
-        private class SubmeshData
-        {
-            public List<Vector3> vertices = new List<Vector3>();
-            public List<Vector3> normals = new List<Vector3>();
-            public List<Color> colors = new List<Color>();
-            public List<Vector2> uvs = new List<Vector2>();
-            public List<int> triangles = new List<int>();
-        }
-
-        private Dictionary<Color, SubmeshData> submeshes = new Dictionary<Color, SubmeshData>();
+        private List<Vector3> vertices = new List<Vector3>();
+        private List<Vector3> normals = new List<Vector3>();
+        private List<Color> colors = new List<Color>();
+        private List<Vector2> uvs = new List<Vector2>();
+        private List<int> triangles = new List<int>();
 
         private static readonly Vector3[] cubeVertices = new Vector3[8]
         {
@@ -65,23 +60,22 @@ namespace Pixension.Utilities
                 return;
             }
 
-            SubmeshData submesh = GetOrCreateSubmesh(color);
-            int vertexOffset = submesh.vertices.Count;
+            int vertexOffset = vertices.Count;
 
             for (int i = 0; i < 4; i++)
             {
-                submesh.vertices.Add(position + cubeVertices[faceIndices[faceIndex][i]]);
-                submesh.normals.Add(normal);
-                submesh.colors.Add(color);
-                submesh.uvs.Add(faceUVs[i]);
+                vertices.Add(position + cubeVertices[faceIndices[faceIndex][i]]);
+                normals.Add(normal);
+                colors.Add(color);
+                uvs.Add(faceUVs[i]);
             }
 
-            submesh.triangles.Add(vertexOffset + 0);
-            submesh.triangles.Add(vertexOffset + 1);
-            submesh.triangles.Add(vertexOffset + 2);
-            submesh.triangles.Add(vertexOffset + 0);
-            submesh.triangles.Add(vertexOffset + 2);
-            submesh.triangles.Add(vertexOffset + 3);
+            triangles.Add(vertexOffset + 0);
+            triangles.Add(vertexOffset + 1);
+            triangles.Add(vertexOffset + 2);
+            triangles.Add(vertexOffset + 0);
+            triangles.Add(vertexOffset + 2);
+            triangles.Add(vertexOffset + 3);
         }
 
         public void AddCube(Vector3 position, Color color, bool[] visibleFaces)
@@ -106,55 +100,24 @@ namespace Pixension.Utilities
             Mesh mesh = new Mesh();
             mesh.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
 
-            List<Vector3> allVertices = new List<Vector3>();
-            List<Vector3> allNormals = new List<Vector3>();
-            List<Color> allColors = new List<Color>();
-            List<Vector2> allUVs = new List<Vector2>();
-
-            mesh.subMeshCount = submeshes.Count;
-            int submeshIndex = 0;
-
-            foreach (var kvp in submeshes)
-            {
-                SubmeshData submesh = kvp.Value;
-                int vertexOffset = allVertices.Count;
-
-                allVertices.AddRange(submesh.vertices);
-                allNormals.AddRange(submesh.normals);
-                allColors.AddRange(submesh.colors);
-                allUVs.AddRange(submesh.uvs);
-
-                List<int> offsetTriangles = new List<int>(submesh.triangles.Count);
-                for (int i = 0; i < submesh.triangles.Count; i++)
-                {
-                    offsetTriangles.Add(submesh.triangles[i] + vertexOffset);
-                }
-
-                mesh.SetVertices(allVertices);
-                mesh.SetNormals(allNormals);
-                mesh.SetColors(allColors);
-                mesh.SetUVs(0, allUVs);
-                mesh.SetTriangles(offsetTriangles, submeshIndex);
-
-                submeshIndex++;
-            }
+            mesh.SetVertices(vertices);
+            mesh.SetNormals(normals);
+            mesh.SetColors(colors);
+            mesh.SetUVs(0, uvs);
+            mesh.SetTriangles(triangles, 0);
 
             mesh.RecalculateBounds();
+
             return mesh;
         }
 
         public void Clear()
         {
-            submeshes.Clear();
-        }
-
-        private SubmeshData GetOrCreateSubmesh(Color color)
-        {
-            if (!submeshes.ContainsKey(color))
-            {
-                submeshes[color] = new SubmeshData();
-            }
-            return submeshes[color];
+            vertices.Clear();
+            normals.Clear();
+            colors.Clear();
+            uvs.Clear();
+            triangles.Clear();
         }
 
         private int GetFaceIndexFromNormal(Vector3 normal)
@@ -167,6 +130,16 @@ namespace Pixension.Utilities
                 }
             }
             return -1;
+        }
+
+        public int GetVertexCount()
+        {
+            return vertices.Count;
+        }
+
+        public int GetTriangleCount()
+        {
+            return triangles.Count / 3;
         }
     }
 }

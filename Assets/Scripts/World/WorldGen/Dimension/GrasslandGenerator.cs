@@ -18,8 +18,15 @@ namespace Pixension.WorldGen
                     int worldX = chunk.chunkPosition.x * Voxels.Chunk.CHUNK_SIZE + x;
                     int worldZ = chunk.chunkPosition.z * Voxels.Chunk.CHUNK_SIZE + z;
 
-                    float noiseValue = noise.Get2DNoise(worldX, worldZ, 0.01f, 3, 0.5f);
-                    int height = Mathf.RoundToInt(noiseValue * 20f + 40f);
+                    // Korrigierte Noise-Parameter:
+                    // scale: 100 = sanfte Hügel
+                    // octaves: 4 = gute Details
+                    // persistence: 0.5 = balanced
+                    float noiseValue = noise.Get2DNoise(worldX, worldZ, 100f, 4, 0.5f);
+
+                    // noiseValue ist -1 bis 1, konvertiere zu Höhe
+                    // Basis-Höhe 50, Variation ±15
+                    int height = Mathf.RoundToInt((noiseValue * 15f) + 50f);
 
                     for (int y = 0; y < Voxels.Chunk.CHUNK_SIZE; y++)
                     {
@@ -29,19 +36,23 @@ namespace Pixension.WorldGen
 
                         if (worldY == 0)
                         {
-                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, Color.black);
+                            // Bedrock
+                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, new Color(0.2f, 0.2f, 0.2f));
                         }
                         else if (worldY >= 1 && worldY <= height - 4)
                         {
-                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, Color.gray);
+                            // Stein
+                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, new Color(0.5f, 0.5f, 0.5f));
                         }
                         else if (worldY >= height - 3 && worldY <= height - 1)
                         {
-                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, new Color(0.4f, 0.25f, 0.1f));
+                            // Erde
+                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, new Color(0.55f, 0.35f, 0.2f));
                         }
                         else if (worldY == height)
                         {
-                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, Color.green);
+                            // Gras
+                            voxel = new Voxels.VoxelData(Voxels.VoxelType.Solid, new Color(0.3f, 0.7f, 0.2f));
                         }
                         else
                         {
@@ -52,6 +63,9 @@ namespace Pixension.WorldGen
                     }
                 }
             }
+
+            // Markiere Chunk als dirty für Mesh-Generierung
+            chunk.SetDirty();
         }
 
         public override List<WorldGen.StructurePlacement> GetStructuresForChunk(Vector3Int chunkPos)
